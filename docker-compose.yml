@@ -1,0 +1,164 @@
+services:
+
+  app:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: coupon-service
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: json-logs
+      GEOLOCATION_OVERRIDE_COUNTRY: PL
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: coupons
+      DB_USER: app
+      DB_PASSWORD: secret
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - coupon-network
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: coupon-postgres
+    environment:
+      POSTGRES_DB: coupons
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d coupons"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - coupon-network
+
+  elasticsearch:
+    image: elasticsearch:8.13.0
+    container_name: coupon-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    networks:
+      - coupon-network
+
+  kibana:
+    image: kibana:8.13.0
+    container_name: coupon-kibana
+    ports:
+      - "5601:5601"
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:5601/api/status | grep -q '\"level\":\"available\"' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    networks:
+      - coupon-network
+
+  kibana-setup:
+    image: curlimages/curl:8.7.1
+    container_name: coupon-kibana-setup
+    depends_on:
+      kibana:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - coupon-network
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        set -eu
+        STATUS=$$(curl -s -o /tmp/body -w "%{http_code}" \
+          -X POST http://kibana:5601/api/data_views/data_view \
+          -H "Content-Type: application/json" \
+          -H "kbn-xsrf: true" \
+          -d '{"data_view":{"title":"coupon-logs-*","name":"coupon-logs","timeFieldName":"@timestamp"}}')
+        if [ "$$STATUS" = "200" ] || [ "$$STATUS" = "409" ]; then
+          echo "Data view ready (HTTP $$STATUS)"
+        else
+          echo "Failed to create data view (HTTP $$STATUS):"
+          cat /tmp/body
+          exit 1
+        fi
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.13.0
+    container_name: coupon-filebeat
+    user: root
+    command: ["filebeat", "-e", "--strict.perms=false"]
+    volumes:
+      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - coupon-network
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: coupon-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - coupon-network
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: coupon-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - coupon-network
+
+volumes:
+  postgres_data:
+  es_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  coupon-network:
+    driver: bridge

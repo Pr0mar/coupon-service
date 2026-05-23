@@ -1,0 +1,41 @@
+filebeat.autodiscover:
+  providers:
+    - type: docker
+      templates:
+        - condition:
+            contains:
+              docker.container.name: "coupon-service"
+          config:
+            - type: container
+              paths:
+                - "/var/lib/docker/containers/${data.docker.container.id}/*.log"
+              json.keys_under_root: true
+              json.add_error_key: true
+              json.message_key: message
+
+processors:
+  - drop_fields:
+      fields:
+        - agent
+        - ecs
+        - input
+        - log
+        - container
+        - docker
+        - host
+        - stream
+        - "@version"
+        - "level_value"
+        - "thread_name"
+        - appName
+      ignore_missing: true
+
+setup.template.name: "coupon-logs"
+setup.template.pattern: "coupon-logs-*"
+setup.ilm.enabled: false
+setup.kibana:
+  host: "kibana:5601"
+
+output.elasticsearch:
+  hosts: ["elasticsearch:9200"]
+  index: "coupon-logs-%{+yyyy.MM.dd}"

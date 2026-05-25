@@ -6,6 +6,7 @@ import com.empik.coupon.api.response.CouponResponse;
 import com.empik.coupon.api.response.CouponUseResponse;
 import com.empik.coupon.domain.Coupon;
 import com.empik.coupon.domain.CouponUsage;
+import com.empik.coupon.domain.RejectionReason;
 import com.empik.coupon.domain.exception.CountryNotAllowedException;
 import com.empik.coupon.domain.exception.CouponAlreadyExistsException;
 import com.empik.coupon.domain.exception.CouponAlreadyUsedException;

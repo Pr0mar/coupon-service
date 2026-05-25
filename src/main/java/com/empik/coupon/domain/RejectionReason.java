@@ -1,11 +1,11 @@
-package com.empik.coupon.service;
+package com.empik.coupon.domain;
 
-enum RejectionReason {
+public enum RejectionReason {
     COUNTRY_NOT_ALLOWED,
     EXHAUSTED,
     ALREADY_USED;
 
-    String tag() {
+    public String tag() {
         return name().toLowerCase();
     }
 }

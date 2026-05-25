@@ -83,3 +83,4 @@ logging:
   level:
     com.empik.coupon: INFO
     org.springframework: WARN
+    org.hibernate.SQL: WARN

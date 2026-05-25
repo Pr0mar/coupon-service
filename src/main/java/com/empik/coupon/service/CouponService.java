@@ -34,9 +34,6 @@ public class CouponService {
     private static final String TAG_COUNTRY = "country";
     private static final String TAG_COUPON = "coupon";
     private static final String TAG_REASON = "reason";
-    private static final String REASON_COUNTRY_NOT_ALLOWED = "country_not_allowed";
-    private static final String REASON_EXHAUSTED = "exhausted";
-    private static final String REASON_ALREADY_USED = "already_used";
 
     private final CouponRepository couponRepository;
     private final CouponUsageRepository couponUsageRepository;
@@ -100,7 +97,7 @@ public class CouponService {
         log.warn("Coupon '{}' redemption rejected: country {} not allowed (required: {})",
             normalizedCode, country, coupon.getCountry());
         meterRegistry.counter(METRIC_REJECTED,
-            TAG_REASON, REASON_COUNTRY_NOT_ALLOWED, TAG_COUPON, normalizedCode).increment();
+            TAG_REASON, RejectionReason.COUNTRY_NOT_ALLOWED.tag(), TAG_COUPON, normalizedCode).increment();
         throw new CountryNotAllowedException(
             "Coupon '%s' is only available in %s".formatted(normalizedCode, coupon.getCountry()));
     }
@@ -112,7 +109,7 @@ public class CouponService {
         }
         log.warn("Coupon '{}' redemption rejected: exhausted", normalizedCode);
         meterRegistry.counter(METRIC_REJECTED,
-            TAG_REASON, REASON_EXHAUSTED, TAG_COUPON, normalizedCode).increment();
+            TAG_REASON, RejectionReason.EXHAUSTED.tag(), TAG_COUPON, normalizedCode).increment();
         throw new CouponExhaustedException(
             "Coupon '%s' has reached its maximum number of uses".formatted(normalizedCode));
     }
@@ -128,7 +125,7 @@ public class CouponService {
             log.warn("Coupon '{}' redemption rejected: user '{}' already used it",
                 normalizedCode, userId);
             meterRegistry.counter(METRIC_REJECTED,
-                TAG_REASON, REASON_ALREADY_USED, TAG_COUPON, normalizedCode).increment();
+                TAG_REASON, RejectionReason.ALREADY_USED.tag(), TAG_COUPON, normalizedCode).increment();
             throw new CouponAlreadyUsedException(
                 "User '%s' has already used coupon '%s'".formatted(userId, normalizedCode));
         }
